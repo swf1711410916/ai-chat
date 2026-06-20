@@ -1,0 +1,28 @@
+请确保你的 Redis 实例已经安装并启用了 RediSearch 模块（通常叫 redis-stack）
+docker run -d --name redis-stack -p 6379:6379 -p 8001:8001 redis/redis-stack:latest
+
+1. 创建或编辑 Docker 配置文件
+在 Linux 终端执行命令：
+
+Bash
+mkdir -p /etc/docker
+vi /etc/docker/daemon.json
+2. 写入以下国内可用的镜像源配置
+进入编辑器后（按 i 进入编辑模式），将原内容清空，复制并粘贴以下最新的代理源：
+
+JSON
+{
+  "registry-mirrors": [
+    "https://docker.m.daocloud.io",
+    "https://docker.hlg.su",
+    "https://docker.1panel.live"
+  ]
+}
+粘贴完成后，按 Esc 键，输入 :wq 并回车保存退出。
+
+3. 重启 Docker 服务
+让刚配置的镜像源生效：
+
+Bash
+systemctl daemon-reload
+systemctl restart docker
