@@ -1,0 +1,28 @@
+version: '3.8'
+
+# 定义自定义 Docker 网络，所有微服务组件通过此网络互通
+networks:
+  micro-net:
+    driver: bridge  # 使用默认的 bridge 驱动（适用于单机部署）
+services:
+  # ========== Redis：缓存中间件 ==========
+  redis:
+    image: redis/redis-stack:latest
+    container_name: redis
+    restart: always
+    command: redis-server /usr/local/etc/redis/redis.conf  # 使用自定义配置文件
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      - /root/docker/redis/data:/data                                 # 持久化数据目录
+      - /root/docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro  # 挂载配置文件（需提前创建）
+    ports:
+      - "6379:6379"   # 映射到宿主机，方便外部应用连接（若仅容器内访问可删除）
+      - "8001:8001"
+    networks:
+      - micro-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

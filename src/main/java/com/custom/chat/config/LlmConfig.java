@@ -55,6 +55,7 @@ public class LlmConfig {
         EmbeddingStore<TextSegment> redisEmbeddingStore = RedisEmbeddingStore.builder()
                 .host("192.168.134.21")                  // 你的 Redis 地址
                 .port(6379)                         // 你的 Redis 端口
+                .user("default")
                 .password("Redis@123!")        // 如果有密码则配置，没有可不写
                 .indexName("rag-knowledge-index")   // 在 Redis 中自动创建的索引表名
                 .dimension(384)                     // 关键：必须与你下面使用的 Embedding 模型向量维度对齐
