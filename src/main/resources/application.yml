@@ -1,0 +1,35 @@
+server:
+  port: 8080
+spring:
+  datasource:
+    # 数据库驱动类名
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # 数据库连接 URL（注意替换为你的数据库名，serverTimezone 避免时区报错）
+    url: jdbc:mysql://192.168.134.21:3306/chat?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    # 数据库用户名
+    username: root
+    # 数据库密码
+    password: Root@123!
+
+    # 以下为 HikariCP 连接池的可选高级配置（通常使用默认值即可）
+    hikari:
+      # 连接池最大连接数
+      maximum-pool-size: 10
+      # 最小空闲连接数
+      minimum-idle: 5
+      # 空闲连接超时时间（毫秒）
+      idle-timeout: 600000
+      # 连接超时时间（毫秒）
+      connection-timeout: 30000
+langchain4j:
+  open-ai:
+    chat-model:
+      # 1. 本地 Ollama 兼容接口地址
+      base-url: "http://localhost:11434/v1"
+      # 2. 你本地下载好的模型名称（例如 deepseek-r1:7b, llama3, qwen2.5 等）
+      model-name: "deepseek-r1:8b"
+      # 3. 本地模型不需要鉴权，随便填一个非空的任意字符串即可
+      api-key: "ollama"
+      # 4. 建议调大超时时间（因为本地电脑跑大模型，响应和生成速度通常比云端慢）
+      timeout: 180s
+      temperature: 0.7
