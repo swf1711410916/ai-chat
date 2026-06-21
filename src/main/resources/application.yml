@@ -21,6 +21,10 @@ spring:
       idle-timeout: 600000
       # 连接超时时间（毫秒）
       connection-timeout: 30000
+  servlet:
+    multipart:
+      max-file-size: 50MB     # 单个文件大小限制
+      max-request-size: 100MB # 单次请求总大小限制
 langchain4j:
   open-ai:
     chat-model:

@@ -47,12 +47,10 @@ public class LlmConfig {
             }
         };
     }
-    // 🚀 【核心修改点】将内存向量存储重构为 Redis 向量存储
+    // 1. 创建 Redis 向量数据库连接
     @Bean
-    public ContentRetriever contentRetriever() {
-
-        // 1. 创建 Redis 向量数据库连接
-        EmbeddingStore<TextSegment> redisEmbeddingStore = RedisEmbeddingStore.builder()
+    public EmbeddingStore<TextSegment> redisEmbeddingStore(){
+        return RedisEmbeddingStore.builder()
                 .host("192.168.134.21")                  // 你的 Redis 地址
                 .port(6379)                         // 你的 Redis 端口
                 .user("default")
@@ -60,24 +58,29 @@ public class LlmConfig {
                 .indexName("rag-knowledge-index")   // 在 Redis 中自动创建的索引表名
                 .dimension(384)                     // 关键：必须与你下面使用的 Embedding 模型向量维度对齐
                 .build();
+    }
+    // 🚀 【核心修改点】将内存向量存储重构为 Redis 向量存储
+    @Bean
+    public ContentRetriever contentRetriever(EmbeddingStore<TextSegment> redisEmbeddingStore) {
 
         // 2. 依然使用本地轻量级向量模型（维度为 384）
         EmbeddingModel embeddingModel = new AllMiniLmL6V2QuantizedEmbeddingModel();
 
         // 💡 提示：此时你在这个 Bean 初始化时写入的测试数据，会实时通过网络写入物理 Redis 中。
         // 项目重启后，Redis 里的数据也不会丢失！
-        TextSegment knowledge1 = TextSegment.from("根据2026年最新规定，上海和北京差旅住宿标准为每天不超过500元。");
-        TextSegment knowledge2 = TextSegment.from("公司统一的报销单据提交截止日期为每月的最后一个工作日。");
+        //TextSegment knowledge1 = TextSegment.from("根据2026年最新规定，上海和北京差旅住宿标准为每天不超过500元。");
+        //TextSegment knowledge2 = TextSegment.from("公司统一的报销单据提交截止日期为每月的最后一个工作日。");
 
         // 首次运行后可以把这两行注释掉，因为数据已经在 Redis 库里持久化了
-        redisEmbeddingStore.add(embeddingModel.embed(knowledge1).content(), knowledge1);
-        redisEmbeddingStore.add(embeddingModel.embed(knowledge2).content(), knowledge2);
+        //redisEmbeddingStore.add(embeddingModel.embed(knowledge1).content(), knowledge1);
+        //redisEmbeddingStore.add(embeddingModel.embed(knowledge2).content(), knowledge2);
 
         // 3. 构建并返回基于 Redis 驱动的 RAG 检索器
         return EmbeddingStoreContentRetriever.builder()
                 .embeddingStore(redisEmbeddingStore)
                 .embeddingModel(embeddingModel)
-                .maxResults(2) // 每次检索最多召回 2 条最相关的上下文
+                .maxResults(3) // 每次检索最多召回 3 条最相关的上下文
+                .minScore(0.6)
                 .build();
     }
     // 3. 构建智能助手，并注入内存提供者

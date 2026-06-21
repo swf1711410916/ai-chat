@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>企业级智能 RAG 知识库 - 对话中心</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .chat-container {
+            width: 100%;
+            max-width: 850px;
+            height: 85vh;
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        /* 头部样式 */
+        .chat-header {
+            background-color: #409eff;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #3a8ee6;
+        }
+        .chat-header h3 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 500;
+        }
+        .user-selector {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+        .user-selector select {
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            font-weight: bold;
+            color: #409eff;
+        }
+        /* 聊天消息区域 */
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background-color: #f9fafc;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        /* 气泡通用样式 */
+        .message-row {
+            display: flex;
+            width: 100%;
+        }
+        .message-row.user { justify-content: flex-end; }
+        .message-row.ai { justify-content: flex-start; }
+
+        .message-bubble {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 15px;
+            line-height: 1.6;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }
+        .message-row.user .message-bubble {
+            background-color: #95ec69;
+            color: #191919;
+            border-top-right-radius: 2px;
+        }
+        .message-row.ai .message-bubble {
+            background-color: #ffffff;
+            color: #303133;
+            border-top-left-radius: 2px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+        }
+        /* 系统/状态提示 */
+        .message-row.system {
+            justify-content: center;
+        }
+        .message-row.system .message-bubble {
+            background-color: rgba(0, 0, 0, 0.05);
+            color: #909399;
+            font-size: 12px;
+            padding: 4px 12px;
+            border-radius: 12px;
+        }
+
+        /* 输入区域 */
+        .chat-input-area {
+            padding: 15px 20px;
+            background-color: #ffffff;
+            border-top: 1px solid #f0f2f5;
+            display: flex;
+            gap: 12px;
+        }
+        .chat-input-area textarea {
+            flex: 1;
+            height: 24px;
+            max-height: 100px;
+            padding: 10px 12px;
+            border: 1px solid #dcdfe6;
+            border-radius: 6px;
+            resize: none;
+            font-size: 15px;
+            outline: none;
+            font-family: inherit;
+            transition: border-color 0.2s;
+        }
+        .chat-input-area textarea:focus {
+            border-color: #409eff;
+        }
+        .btn-send {
+            background-color: #409eff;
+            color: white;
+            border: none;
+            padding: 0 22px;
+            border-radius: 6px;
+            font-size: 15px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            font-weight: 500;
+        }
+        .btn-send:hover { background-color: #66b1ff; }
+        .btn-send:disabled {
+            background-color: #c0c4cc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+
+<div class="chat-container">
+    <div class="chat-header">
+        <h3>🤖 企业级智能 RAG 问答中心</h3>
+        <div class="user-selector">
+            <span>当前模拟身份:</span>
+            <select id="user-select">
+                <option value="user_zhangsan">张三 (部门A)</option>
+                <option value="user_lisi">李四 (部门B)</option>
+                <option value="user_wangwu">王五 (访客)</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="chat-messages" id="chat-messages-box">
+        <div class="message-row system">
+            <div class="message-bubble">系统：已连接至 Redis 7.x 向量库及历史记忆库，请开始提问。</div>
+        </div>
+        <div class="message-row ai">
+            <div class="message-bubble">您好！我是您的智能助理。我已经学习了您上传的电子书及规章制度，请问有什么可以帮您？</div>
+        </div>
+    </div>
+
+    <div class="chat-input-area">
+        <textarea id="chat-input" placeholder="输入您的问题... (按 Enter 发送，Shift+Enter 换行)"></textarea>
+        <button class="btn-send" id="btn-send">发送</button>
+    </div>
+</div>
+
+<script>
+    const messagesBox = document.getElementById('chat-messages-box');
+    const chatInput = document.getElementById('chat-input');
+    const btnSend = document.getElementById('btn-send');
+    const userSelect = document.getElementById('user-select');
+
+    // 切换用户时清空当前屏幕，模拟换人场景（后端数据库里其实还留着历史）
+    userSelect.addEventListener('change', () => {
+        appendMessageSystem(`切换用户为：${userSelect.options[userSelect.selectedIndex].text}，正在读取专属记忆...`);
+    });
+
+    // 发送按钮点击事件
+    btnSend.addEventListener('click', sendMessage);
+
+    // 键盘事件捕获（回车发送）
+    chatInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault(); // 阻止默认的回车换行
+            sendMessage();
+        }
+    });
+
+    // 核心发送逻辑
+    async function sendMessage() {
+        const text = chatInput.value.trim();
+        if (!text) return;
+
+        const currentUserId = userSelect.value;
+
+        // 1. 在 UI 上渲染用户发送的内容
+        appendMessageHtml(text, 'user');
+        chatInput.value = ''; // 清空输入框
+        setLoading(true);
+
+        try {
+            // 2. 构造符合你后端 Controller 接收格式的请求
+            // 💡 提示：这里假设你的接口路径为 /user-chat，接受参数 userId 和 message
+            // 如果你的接口接收的是 JSON 对象，请参考下方注释修改
+            const response = await fetch(`/user-chat?userId=${encodeURIComponent(currentUserId)}&prompt=${encodeURIComponent(text)}`, {
+                method: 'GET'
+            });
+
+            /* // 如果你的后端接收的是 @RequestBody JSON 对象，请用这段逻辑：
+            const response = await fetch('/user-chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: currentUserId, message: text })
+            });
+            */
+
+            const replyText = await response.text();
+
+            if (response.ok) {
+                // 3. 渲染 AI 的 RAG 检索回答
+                appendMessageHtml(replyText, 'ai');
+            } else {
+                appendMessageHtml(`❌ 交互失败 (${response.status}): ${replyText}`, 'ai');
+            }
+        } catch (error) {
+            appendMessageHtml(`❌ 网络异常，无法连接至后端服务: ${error.message}`, 'ai');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    // 动态拼接消息气泡
+    function appendMessageHtml(text, role) {
+        const row = document.createElement('div');
+        row.className = `message-row ${role}`;
+
+        const bubble = document.createElement('div');
+        bubble.className = 'message-bubble';
+        bubble.textContent = text;
+
+        row.appendChild(bubble);
+        messagesBox.appendChild(row);
+
+        // 自动滚动到最底部
+        messagesBox.scrollTop = messagesBox.scrollHeight;
+    }
+
+    // 动态拼接系统提示
+    function appendMessageSystem(text) {
+        appendMessageHtml(text, 'system');
+    }
+
+    // 控制输入状态
+    function setLoading(isLoading) {
+        if (isLoading) {
+            chatInput.disabled = true;
+            btnSend.disabled = true;
+            btnSend.textContent = '思考中...';
+        } else {
+            chatInput.disabled = false;
+            btnSend.disabled = false;
+            btnSend.textContent = '发送';
+            chatInput.focus();
+        }
+    }
+</script>
+
+</body>
+</html>

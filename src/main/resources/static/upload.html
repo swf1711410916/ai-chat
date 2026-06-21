@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>企业知识库 - 向量数据导入中心</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+            background-color: #f5f7fa;
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 600px;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            padding: 30px;
+        }
+        h2 {
+            color: #303133;
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+        p.subtitle {
+            color: #909399;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        /* 拖拽上传区域样式 */
+        .upload-area {
+            border: 2px dashed #dcdfe6;
+            border-radius: 6px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            background-color: #fafafa;
+            transition: all 0.3s;
+        }
+        .upload-area:hover, .upload-area.dragover {
+            border-color: #409eff;
+            background-color: #ecf5ff;
+        }
+        .upload-icon {
+            font-size: 40px;
+            color: #c0c4cc;
+            margin-bottom: 10px;
+        }
+        .upload-text {
+            color: #606266;
+            font-size: 16px;
+        }
+        .upload-text em {
+            color: #409eff;
+            font-style: normal;
+            font-weight: bold;
+        }
+        .upload-tip {
+            color: #909399;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+        /* 文件列表与状态 */
+        .file-info {
+            display: none;
+            margin-top: 20px;
+            padding: 12px;
+            background-color: #f4f4f5;
+            border-radius: 4px;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .file-name {
+            color: #606266;
+            font-size: 14px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 80%;
+        }
+        /* 提交按钮 */
+        .btn-submit {
+            display: block;
+            width: 100%;
+            background-color: #409eff;
+            color: white;
+            border: none;
+            padding: 12px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 25px;
+            font-weight: 500;
+            transition: background-color 0.3s;
+        }
+        .btn-submit:hover {
+            background-color: #66b1ff;
+        }
+        .btn-submit:disabled {
+            background-color: #a0cfff;
+            cursor: not-allowed;
+        }
+        /* 提示信息占位 */
+        #status-message {
+            margin-top: 20px;
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            display: none;
+            line-height: 1.5;
+        }
+        .success { background-color: #f0f9eb; color: #67c23a; border: 1px solid #e1f3d8; }
+        .error { background-color: #fef0f0; color: #f56c6c; border: 1px solid #fde2e2; }
+        .info { background-color: #edf2fc; color: #909399; border: 1px solid #ebeef5; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>导入私有文档到 Redis 向量库</h2>
+    <p class="subtitle">支持 PDF, Word, TXT, Markdown 等格式。文件将被自动分片、向量化并建立 HNSW 索引。</p>
+
+    <input type="file" id="file-input" accept=".pdf,.doc,.docx,.txt,.md" style="display: none;">
+
+    <div class="upload-area" id="drop-zone">
+        <div class="upload-icon">📤</div>
+        <div class="upload-text">将文件拖到此处，或 <em>点击上传</em></div>
+        <div class="upload-tip">建议单个文件大小不超过 20MB</div>
+    </div>
+
+    <div class="file-info" id="file-box">
+        <span class="file-name" id="selected-file-name">未选择任何文件</span>
+        <span style="color: #409eff; font-size: 12px; cursor: pointer;" id="btn-remove">移除</span>
+    </div>
+
+    <button class="btn-submit" id="btn-upload" disabled>开始向量化导入</button>
+
+    <div id="status-message"></div>
+</div>
+
+<script>
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const fileBox = document.getElementById('file-box');
+    const fileNameSpan = document.getElementById('selected-file-name');
+    const btnRemove = document.getElementById('btn-remove');
+    const btnUpload = document.getElementById('btn-upload');
+    const statusMsg = document.getElementById('status-message');
+
+    let currentFile = null;
+
+    // 点击上传区域触发隐藏的 file input
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    // 监听文件选择变更
+    fileInput.addEventListener('change', (e) => {
+        handleFileSelect(e.target.files[0]);
+    });
+
+    // 拖拽文件入港事件
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('dragover');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) {
+            handleFileSelect(e.dataTransfer.files[0]);
+        }
+    });
+
+    // 统一处理文件选中逻辑
+    function handleFileSelect(file) {
+        if (!file) return;
+        currentFile = file;
+        fileNameSpan.textContent = `${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+        fileBox.style.display = 'flex';
+        btnUpload.disabled = false;
+        clearStatus();
+    }
+
+    // 移除选中文件
+    btnRemove.addEventListener('click', (e) => {
+        e.stopPropagation(); // 阻止冒泡触发 dropZone 点击
+        currentFile = null;
+        fileInput.value = '';
+        fileBox.style.display = 'none';
+        btnUpload.disabled = true;
+        clearStatus();
+    });
+
+    // 清理状态提示
+    function clearStatus() {
+        statusMsg.style.display = 'none';
+        statusMsg.className = '';
+        statusMsg.innerHTML = '';
+    }
+
+    // 显示状态提示
+    function showStatus(text, type) {
+        statusMsg.style.display = 'block';
+        statusMsg.className = type; // success, error, info
+        statusMsg.innerHTML = text;
+    }
+
+    // 异步网络请求：一键上传并解析
+    btnUpload.addEventListener('click', async () => {
+        if (!currentFile) return;
+
+        // 组装标准的 FormData 多部件表单数据
+        const formData = new FormData();
+        formData.append('file', currentFile);
+
+        // 改变 UI 状态为“加载中”
+        btnUpload.disabled = true;
+        btnUpload.textContent = '正在深度解析并洗入 Redis 向量库...';
+        showStatus('⏳ 正在解析文档并计算 Embedding 向量，文件较大时可能需要 10-30 秒，请勿刷新页面...', 'info');
+
+        try {
+            // 发送 POST 请求到 Spring Boot 后端
+            const response = await fetch('/knowledge/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            const resultText = await response.text();
+
+            if (response.ok) {
+                showStatus(`<strong>导入成功！</strong><br>${resultText}`, 'success');
+                // 重置上传状态
+                currentFile = null;
+                fileInput.value = '';
+                fileBox.style.display = 'none';
+            } else {
+                showStatus(`<strong>服务器处理失败：</strong><br>${resultText}`, 'error');
+            }
+        } catch (error) {
+            showStatus(`<strong>网络或系统异常：</strong><br>${error.message}`, 'error');
+        } finally {
+            btnUpload.textContent = '开始向量化导入';
+            if (currentFile) {
+                btnUpload.disabled = false;
+            }
+        }
+    });
+</script>
+
+</body>
+</html>
